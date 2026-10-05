@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seek Protocol · 三层提纯协议</title>
+<style>
+  :root{
+    --bg:#0c0c0c;
+    --surface:#161616;
+    --line:#232326;
+    --text:#f2f2f2;
+    --muted:#95959f;
+    --accent:#165f49;
+    --accent-hi:#3ba57f;
+    --mint:#b0ffc4;
+    --yellow:#fee420;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Courier New",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --ease:cubic-bezier(0.86,0,0.07,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{height:100%;}
+  body{
+    height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.7;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  ::selection{background:var(--yellow);color:#000;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ---------- header ---------- */
+  header{
+    flex:0 0 auto;
+    padding:18px 32px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:flex-end;
+    gap:28px;
+    flex-wrap:wrap;
+  }
+  .brand h1{
+    font-size:20px;
+    font-weight:700;
+    letter-spacing:.02em;
+    line-height:1.2;
+  }
+  .brand h1 .cn{
+    font-size:12px;
+    font-weight:400;
+    color:var(--muted);
+    margin-left:10px;
+    letter-spacing:.2em;
+  }
+  .brand .slogan{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .progress{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    margin-left:auto;
+  }
+  .step{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    color:var(--muted);
+    transition:color .25s var(--ease);
+  }
+  .led{
+    width:8px;height:8px;border-radius:50%;
+    border:1px solid #3a3a3f;
+    background:transparent;
+    transition:all .25s var(--ease);
+  }
+  .step.done .led{background:var(--mint);border-color:var(--mint);box-shadow:0 0 8px rgba(176,255,196,.35);}
+  .step.done{color:var(--text);}
+  .step.current .led{background:var(--mint);border-color:var(--mint);animation:pulse 1.6s infinite;}
+  .step.current{color:var(--mint);}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(176,255,196,.45);}
+    50%{box-shadow:0 0 0 6px rgba(176,255,196,0);}
+  }
+  .hactions{display:flex;gap:8px;}
+  .hbtn{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+    padding:6px 14px;
+    border-radius:999px;
+    transition:all .2s var(--ease);
+  }
+  .hbtn:hover{border-color:var(--accent-hi);color:var(--text);}
+
+  /* ---------- chat ---------- */
+  #chat{
+    flex:1 1 auto;
+    overflow-y:auto;
+    padding:32px;
+  }
+  #chat::-webkit-scrollbar{width:6px;}
+  #chat::-webkit-scrollbar-thumb{background:#2c2c30;border-radius:3px;}
+  .thread{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:28px;}
+
+  .msg{animation:enter .3s var(--ease);}
+  @keyframes enter{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  .msg-user{
+    align-self:flex-end;
+    max-width:78%;
+    background:var(--surface);
+    border:1px solid var(--line);
+    padding:10px 16px;
+    border-radius:14px 14px 4px 14px;
+    position:relative;
+  }
+  .msg-user .edit-btn{
+    position:absolute;
+    left:-30px;top:50%;transform:translateY(-50%);
+    background:none;border:none;color:#55555c;
+    font-size:11px;font-family:var(--mono);
+    opacity:0;transition:opacity .2s;
+  }
+  .msg-user:hover .edit-btn{opacity:1;}
+  .msg-user .edit-btn:hover{color:var(--yellow);}
+
+  .msg-ai{align-self:stretch;}
+  .msg-ai .ai-tag{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.22em;
+    color:var(--accent-hi);
+    margin-bottom:10px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .msg-ai .ai-tag::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  .field{margin:14px 0;}
+  .field .flabel{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    color:var(--mint);
+    margin-bottom:4px;
+  }
+  .field .fbody{color:var(--text);}
+  .field .fbody .dim{color:var(--muted);}
+  .field.warn .flabel{color:var(--yellow);}
+  .field.warn .fbody{color:var(--muted);font-size:13px;}
+
+  .qblock{margin:16px 0;padding-left:14px;border-left:2px solid var(--accent);}
+  .qblock .qtext{margin-bottom:8px;}
+  .qblock .qtext .qnum{font-family:var(--mono);color:var(--muted);margin-right:6px;}
+  .opts{display:flex;gap:8px;flex-wrap:wrap;}
+  .opt{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--muted);
+    border-radius:999px;
+    padding:4px 14px;
+    font-size:13px;
+    transition:all .2s var(--ease);
+  }
+  .opt:hover{border-color:var(--accent-hi);color:var(--text);}
+  .opt.picked{border-color:var(--mint);color:var(--mint);}
+  .opt .k{font-family:var(--mono);margin-right:6px;color:var(--accent-hi);}
+
+  .div-point{margin:10px 0;padding-left:14px;border-left:2px solid var(--yellow);}
+  .div-point .dlabel{
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    color:var(--yellow);margin-bottom:2px;
+  }
+
+  blockquote.verdict{
+    margin:20px 0 4px;
+    padding:14px 18px;
+    border-left:3px solid var(--mint);
+    background:rgba(176,255,196,.05);
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:.02em;
+  }
+
+  .assumption{
+    display:inline-block;
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+    color:var(--yellow);
+    border:1px solid rgba(254,228,32,.35);
+    border-radius:4px;
+    padding:1px 7px;
+    margin-left:8px;
+    vertical-align:2px;
+  }
+
+  .typing{display:inline-flex;gap:4px;padding:6px 0;}
+  .typing i{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:tp 1s infinite;}
+  .typing i:nth-child(2){animation-delay:.15s;}
+  .typing i:nth-child(3){animation-delay:.3s;}
+  @keyframes tp{0%,100%{opacity:.25;}50%{opacity:1;}}
+
+  /* ---------- footer ---------- */
+  footer{flex:0 0 auto;border-top:1px solid var(--line);padding:12px 32px 18px;}
+  .footer-inner{max-width:760px;margin:0 auto;}
+  .cmdbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .cmd{
+    background:none;border:none;
+    color:var(--muted);
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    padding:3px 10px;border-radius:999px;
+    transition:all .2s var(--ease);
+  }
+  .cmd:hover{background:var(--accent);color:#fff;}
+  .cmd.hint{color:#4c4c53;cursor:default;}
+  .cmd.hint:hover{background:none;color:#4c4c53;}
+  .input-row{display:flex;gap:10px;align-items:flex-end;}
+  #input{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    color:var(--text);
+    font-family:inherit;font-size:15px;line-height:1.6;
+    padding:10px 14px;
+    resize:none;
+    min-height:44px;max-height:140px;
+    outline:none;
+    transition:border-color .2s var(--ease);
+  }
+  #input:focus{border-color:var(--accent-hi);}
+  #input::placeholder{color:#55555c;}
+  #send{
+    background:var(--accent);
+    color:#fff;border:none;
+    border-radius:10px;
+    padding:0 22px;height:44px;
+    font-size:14px;letter-spacing:.1em;
+    transition:background .2s var(--ease);
+  }
+  #send:hover{background:var(--accent-hi);}
+
+  /* ---------- drawer ---------- */
+  #drawer{
+    position:fixed;top:0;right:0;bottom:0;
+    width:min(400px,92vw);
+    background:#101010;
+    border-left:1px solid var(--line);
+    transform:translateX(100%);
+    transition:transform .35s var(--ease);
+    display:flex;flex-direction:column;
+    z-index:20;
+  }
+  #drawer.open{transform:none;}
+  .drawer-head{
+    display:flex;align-items:center;gap:4px;
+    padding:16px 20px;border-bottom:1px solid var(--line);
+  }
+  .dtab{
+    background:none;border:none;color:var(--muted);
+    font-size:13px;padding:6px 14px;border-radius:999px;
+    transition:all .2s var(--ease);
+  }
+  .dtab.active{background:var(--surface);color:var(--text);}
+  .drawer-close{
+    margin-left:auto;background:none;border:none;
+    color:var(--muted);font-size:18px;line-height:1;
+  }
+  .drawer-close:hover{color:var(--text);}
+  .drawer-body{flex:1;overflow-y:auto;padding:20px;}
+
+  .model-item{
+    padding:12px 0;border-bottom:1px solid var(--line);
+  }
+  .model-item .mname{font-weight:600;font-size:14px;}
+  .model-item .mname .custom-badge{
+    font-family:var(--mono);font-size:9px;color:var(--yellow);
+    border:1px solid rgba(254,228,32,.35);border-radius:3px;
+    padding:0 5px;margin-left:8px;vertical-align:2px;letter-spacing:.1em;
+  }
+  .model-item .mmeta{font-size:12px;color:var(--muted);margin-top:3px;}
+  .model-item .mdel{
+    float:right;background:none;border:none;color:#55555c;font-size:11px;font-family:var(--mono);
+  }
+  .model-item .mdel:hover{color:#e06565;}
+  .add-model{margin-top:18px;}
+  .add-model textarea{
+    width:100%;background:var(--surface);border:1px solid var(--line);
+    border-radius:8px;color:var(--text);
+    font-family:var(--mono);font-size:12px;
+    padding:10px;resize:none;height:64px;outline:none;
+  }
+  .add-model textarea:focus{border-color:var(--accent-hi);}
+  .add-model .tip{font-size:11px;color:var(--muted);margin:6px 0 8px;}
+  .btn-row{display:flex;gap:8px;}
+  .btn{
+    background:var(--accent);color:#fff;border:none;
+    border-radius:8px;padding:7px 16px;font-size:12px;letter-spacing:.08em;
+    transition:background .2s var(--ease);
+  }
+  .btn:hover{background:var(--accent-hi);}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--muted);}
+  .btn.ghost:hover{border-color:var(--accent-hi);color:var(--text);}
+
+  .hist-item{padding:12px 0;border-bottom:1px solid var(--line);}
+  .hist-item .htime{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;}
+  .hist-item .hinput{font-size:13px;margin-top:3px;}
+  .hist-item .hmeta{font-size:11px;color:var(--muted);margin-top:3px;}
+  .empty-note{color:var(--muted);font-size:13px;padding:20px 0;text-align:center;}
+
+  @media (max-width:720px){
+    header{padding:14px 16px 10px;gap:14px;}
+    .progress{margin-left:0;width:100%;justify-content:space-between;gap:6px;}
+    #chat{padding:20px 16px;}
+    footer{padding:10px 16px 14px;}
+    .step .slabel{display:none;}
+    .msg-user{max-width:92%;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Seek Protocol<span class="cn">三层提纯协议</span></h1>
+    <div class="slogan">你才是决定者，AI 做的是帮你看清楚</div>
+  </div>
+  <div class="progress" id="progress">
+    <div class="step" data-layer="0"><span class="led"></span><span class="slabel">信息收集</span>L0</div>
+    <div class="step" data-layer="1"><span class="led"></span><span class="slabel">注意力</span>L1</div>
+    <div class="step" data-layer="2"><span class="led"></span><span class="slabel">解释</span>L2</div>
+    <div class="step" data-layer="3"><span class="led"></span><span class="slabel">验证</span>L3</div>
+  </div>
+  <div class="hactions">
+    <button class="hbtn" id="btn-models">模型库</button>
+    <button class="hbtn" id="btn-history">历史记录</button>
+  </div>
+</header>
+
+<main id="chat"><div class="thread" id="thread"></div></main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="cmdbar">
+      <span class="cmd hint">指令</span>
+      <button class="cmd" data-cmd="继续">继续</button>
+      <button class="cmd" data-cmd="重选">重选</button>
+      <button class="cmd" data-cmd="跳过">跳过</button>
+      <button class="cmd" data-cmd="暂停">暂停</button>
+      <button class="cmd" data-cmd="重置">重置</button>
+      <button class="cmd" data-cmd="直接给结论">直接给结论</button>
+    </div>
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="说出你想看清的问题……"></textarea>
+      <button id="send">发送</button>
+    </div>
+  </div>
+</footer>
+
+<aside id="drawer">
+  <div class="drawer-head">
+    <button class="dtab active" data-tab="models">思维模型库</button>
+    <button class="dtab" data-tab="history">历史记录</button>
+    <button class="drawer-close" id="drawer-close">×</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<script>
+/* =========================================================
+   Seek Protocol · 三层提纯协议
+   状态机：L0 信息收集 → L1 注意力分配 → L2 解释与解决 → L3 验证与反馈
+   ========================================================= */
+
+/* ---------- 内置模型库 ---------- */
+const BUILTIN_MODELS = [
+  {name:'经济学-机会成本', scene:'资源有限、需要取舍', question:'这个选择放弃了什么？',
+   keys:['选择','放弃','取舍','资源','机会','值不值','要不要','还是','成本','划算']},
+  {name:'心理学-确认偏误', scene:'已有倾向、需要检验', question:'我在寻找支持还是真相？',
+   keys:['觉得','认为','相信','感觉','倾向','怀疑','是不是','一直','证明','偏见']},
+  {name:'物理学-熵', scene:'混乱无序、需要整理', question:'系统的无序度在增加吗？',
+   keys:['乱','混乱','整理','规划','失控','杂','无序','安排','琐碎','效率']},
+  {name:'生物学-生态位', scene:'竞争定位、差异化', question:'我在哪个位置有优势？',
+   keys:['竞争','优势','定位','差异','卷','同行','市场','脱颖而出','赛道','排名']},
+  {name:'数学-约束优化', scene:'多变量、找最优解', question:'约束条件下什么是可行的？',
+   keys:['最优','平衡','兼顾','既要','又要','约束','分配','多项','同时','最大化']}
+];
+
+/* ---------- 领域知识 ---------- */
+const DOMAINS = {
+  career:{name:'职业与路径',
+    keys:['工作','辞职','跳槽','offer','职业','转行','考研','考公','留学','面试','升职','裁员','事业','入职','岗位','公司'],
+    core:['眼前的稳定保障','未来的成长空间'],
+    secondary:[['收入的确定性','兴趣与意义的匹配'],['已投入的沉没成本','长期的复利积累'],['他人的期待','自己的真实意愿']]},
+  finance:{name:'资源与取舍',
+    keys:['投资','买房','买车','钱','理财','创业','副业','股票','基金','贷款','存款','合伙','加盟'],
+    core:['当下的确定性收益','未来的可能性'],
+    secondary:[['本金的安全','回报的弹性'],['流动性','增值空间'],['短期压力','长期底气']]},
+  relationship:{name:'关系与情感',
+    keys:['感情','分手','结婚','恋爱','朋友','家庭','父母','孩子','伴侣','对象','婚姻','同事关系'],
+    core:['自我的真实需求','关系的维系'],
+    secondary:[['表达真实','维持和谐'],['短期情绪','长期信任'],['自己的边界','对方的感受']]},
+  study:{name:'学习与成长',
+    keys:['学习','考试','专业','论文','毕业','证书','读书','技能','课程','选题','导师'],
+    core:['短期的投入成本','长期的回报兑现'],
+    secondary:[['广度涉猎','深度专精'],['外界认可的标准','内在驱动的方向'],['当下的成绩','可迁移的能力']]},
+  health:{name:'习惯与身心',
+    keys:['健康','减肥','作息','锻炼','睡眠','焦虑','运动','饮食','戒'],
+    core:['即刻的舒适','长期的身体本钱'],
+    secondary:[['意志力消耗','环境设计'],['理想计划','可执行的最低行动'],['短期见效','可持续节奏']]},
+  general:{name:'一般决策',
+    keys:[],
+    core:['你想要的东西','你愿意放弃的东西'],
+    secondary:[['短期代价','长期收益'],['外部评价','内部标准'],['确定的部分','不确定的部分']]}
+};
+
+/* ---------- 不适用场景 ---------- */
+const NA_RULES = [
+  {re:/(天气|几点|星期几|多少号|是谁|什么意思|怎么读|拼音|单词|翻译一下)/, type:'简单事实查询', hint:'这类问题直接搜索或询问即可，不需要四层提纯。'},
+  {re:/(着火|急救|报警|自杀|中毒|晕倒|出血不止|心梗)/, type:'紧急情况', hint:'请立即拨打当地紧急电话（火警 119 / 急救 120 / 报警 110），不要在这里等待分析。'},
+  {re:/(写一首|写诗|编个故事|讲个笑话|起个名|画一|来一段)/, type:'创意发散', hint:'创意没有对错，不需要提纯——直接告诉我想写/想画什么，我们直接开始。'}
+];
+
+/* ---------- 状态 ---------- */
+const LS_STATE='seekProtocol.state.v1';
+const LS_HISTORY='seekProtocol.history.v1';
+const LS_MODELS='seekProtocol.customModels.v1';
+
+function freshState(){
+  return {
+    layer:0,                 // 0..3
+    phase:'idle',            // idle | l0 | l1 | l2 | l3 | done | na
+    userInput:'',
+    domain:'general',
+    questions:[],            // [{text,options:[..],answer:null|'跳过',free:''}]
+    assumptions:[],
+    boundary:'', core:'', secondary:[], direction:'',
+    model:null, angles:[], conclusion:'',
+    counter:'', divergences:[], verdictQ:'',
+    archived:false,
+    snapshots:[]             // 每条用户消息处理前的 state 深拷贝（用于编辑回滚）
+  };
+}
+let state=freshState();
+let customModels=loadJSON(LS_MODELS,[]);
+
+function loadJSON(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f;}catch(e){return f;}}
+function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function persist(){saveJSON(LS_STATE,{state,messages:serializeMessages()});}
+function deepCopy(o){return JSON.parse(JSON.stringify(o));}
+
+/* ---------- DOM ---------- */
+const thread=document.getElementById('thread');
+const inputEl=document.getElementById('input');
+const sendBtn=document.getElementById('send');
+const drawer=document.getElementById('drawer');
+const drawerBody=document.getElementById('drawer-body');
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function scrollBottom(){const c=document.getElementById('chat');c.scrollTop=c.scrollHeight;}
+
+/* ---------- 消息渲染 ---------- */
+function addUserMsg(text){
+  const d=document.createElement('div');
+  d.className='msg msg-user';
+  d.innerHTML=esc(text)+'<button class="edit-btn" title="编辑并重算">编辑</button>';
+  d.querySelector('.edit-btn').onclick=()=>editFrom(d);
+  thread.appendChild(d);scrollBottom();
+}
+function addAiMsg(html,tag){
+  const d=document.createElement('div');
+  d.className='msg msg-ai';
+  d.innerHTML='<div class="ai-tag">'+esc(tag||'SEEK PROTOCOL')+'</div>'+html;
+  thread.appendChild(d);scrollBottom();
+  return d;
+}
+function addTyping(){
+  const d=document.createElement('div');
+  d.className='msg msg-ai';
+  d.innerHTML='<div class="ai-tag">SEEK PROTOCOL</div><div class="typing"><i></i><i></i><i></i></div>';
+  thread.appendChild(d);scrollBottom();
+  return d;
+}
+function field(label,body,warn){
+  return '<div class="field'+(warn?' warn':'')+'"><div class="flabel">'+esc(label)+'</div><div class="fbody">'+body+'</div></div>';
+}
+function serializeMessages(){
+  return [...thread.children].map(el=>({cls:el.className,html:el.innerHTML}));
+}
+function restoreMessages(list){
+  thread.innerHTML='';
+  (list||[]).forEach(m=>{
+    const d=document.createElement('div');
+    d.className=m.cls;d.innerHTML=m.html;
+    if(d.classList.contains('msg-user')){
+      const b=d.querySelector('.edit-btn');
+      if(b)b.onclick=()=>editFrom(d);
+    }
+    thread.appendChild(d);
+  });
+  scrollBottom();
+}
+</script>
+<script>
+/* ---------- 领域识别 ---------- */
+function detectDomain(text){
+  let best='general',bestScore=0;
+  for(const k in DOMAINS){
+    const s=DOMAINS[k].keys.reduce((n,w)=>n+(text.includes(w)?1:0),0);
+    if(s>bestScore){bestScore=s;best=k;}
+  }
+  return best;
+}
+function checkNA(text){
+  for(const r of NA_RULES)if(r.re.test(text))return r;
+  return null;
+}
+
+/* ---------- 第 0 层：信息收集 ---------- */
+const TIME_OPTS=['一周内','一个月内','三个月以上'];
+const STAKE_OPTS=['金钱 / 物质','时间 / 机会','关系 / 情感'];
+const GOAL_OPTS=['稳妥、可预期','有想象空间、可承担风险','还没想清楚'];
+
+function buildQuestions(domain){
+  const d=DOMAINS[domain];
+  return [
+    {text:'这个「'+d.name+'」问题，需要在多长时间内落定？',options:TIME_OPTS.slice(),answer:null,assume:'时间窗口按一个月内处理'},
+    {text:'在这个决定里，你最输不起的是什么？',options:STAKE_OPTS.slice(),answer:null,assume:'默认你最看重时间与机会成本'},
+    {text:'你内心更偏向哪种结果？',options:GOAL_OPTS.slice(),answer:null,assume:'默认你偏向稳妥可预期的结果'}
+  ];
+}
+
+function renderL0(){
+  const q=state.questions;
+  let html=field('【我需要确认】','<span class="dim">在分析之前，我需要补齐关键信息。点击选项或用「1A 2B 3C」快速回答；也可以说「跳过」，我会用默认假设推进。</span>');
+  q.forEach((it,i)=>{
+    html+='<div class="qblock" data-q="'+i+'"><div class="qtext"><span class="qnum">'+(i+1)+'.</span>'+esc(it.text)+'</div><div class="opts">';
+    it.options.forEach((op,j)=>{
+      const L='ABC'[j];
+      html+='<button class="opt'+(it.answer===L?' picked':'')+'" data-q="'+i+'" data-l="'+L+'"><span class="k">'+L+'</span>'+esc(op)+'</button>';
+    });
+    html+='</div></div>';
+  });
+  html+=field('【或者】','<span class="dim">直接说「跳过」，我用默认假设继续。</span>');
+  const el=addAiMsg(html,'LAYER 0 · 信息收集');
+  el.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    const qi=+b.dataset.q,l=b.dataset.l;
+    b.parentElement.querySelectorAll('.opt').forEach(x=>x.classList.remove('picked'));
+    b.classList.add('picked');
+    state.questions[qi].answer=l;
+    state.questions[qi].free='';
+    persist();
+    if(allAnswered())setTimeout(runL1,350);
+  });
+  state.phase='l0';
+  updateProgress();
+}
+
+function allAnswered(){return state.questions.every(q=>q.answer||q.free);}
+
+function parseAnswers(text){
+  const pairs=[...text.matchAll(/([123])\s*([ABCabc])/g)];
+  let matched=false;
+  pairs.forEach(m=>{
+    const qi=+m[1]-1;
+    if(state.questions[qi]){state.questions[qi].answer=m[2].toUpperCase();state.questions[qi].free='';matched=true;}
+  });
+  if(!matched){
+    const bare=text.trim().match(/^([ABCabc])(\s+([ABCabc])(\s+([ABCabc]))?)?$/);
+    if(bare){
+      const letters=text.trim().toUpperCase().split(/\s+/);
+      let qi=0;
+      letters.forEach(L=>{
+        while(qi<3&&(state.questions[qi].answer||state.questions[qi].free))qi++;
+        if(qi<3){state.questions[qi].answer=L;state.questions[qi].free='';}
+      });
+      matched=true;
+    }
+  }
+  return matched;
+}
+
+function finalizeAssumptions(){
+  state.assumptions=[];
+  state.questions.forEach((q,i)=>{
+    if(q.answer==='跳过'||(!q.answer&&!q.free))state.assumptions.push(q.assume);
+  });
+}
+function answerText(i){
+  const q=state.questions[i];
+  if(!q)return null;
+  if(q.free)return q.free;
+  if(!q.answer||q.answer==='跳过')return null;
+  return q.options['ABC'.indexOf(q.answer)];
+}
+
+/* ---------- 第 1 层：注意力分配 ---------- */
+function runL1(){
+  finalizeAssumptions();
+  const d=DOMAINS[state.domain];
+  const time=answerText(0)||'一个月内';
+  const stake=answerText(1)||'时间与机会';
+  const goal=answerText(2)||'稳妥可预期';
+  const topic=state.userInput.length>30?state.userInput.slice(0,30)+'…':state.userInput;
+
+  state.boundary='在「'+time+'」的时间窗口内，以不失去「'+stake+'」为底线，判断「'+topic+'」该如何抉择。';
+  state.core=d.core[0]+' vs '+d.core[1];
+  state.secondary=d.secondary.map(s=>s[0]+' vs '+s[1]);
+  const goalIdx=state.questions[2]&&state.questions[2].answer?('ABC'.indexOf(state.questions[2].answer)):2;
+  state.direction = goalIdx===1 ? d.core[1] : d.core[0];
+  if(goalIdx===2) state.direction=d.core[0]+'（在未想清楚前，先守住这一侧）';
+
+  const assumed=state.assumptions.length>0;
+  let html=field('【边界】',esc(state.boundary)+(assumed?'<span class="assumption">基于假设</span>':''));
+  html+=field('【核心矛盾】','<strong>'+esc(state.core)+'</strong>');
+  html+=field('【次要矛盾】',state.secondary.map((s,i)=>esc((i+1)+'. '+s)).join('<br>'));
+  html+=field('【建议深入】',esc(state.direction)+'<br><span class="dim">只深入这一个方向。说「继续」进入第 2 层，或「重选」返回修改回答。</span>');
+  if(assumed)html+=field('【默认假设】',state.assumptions.map(a=>esc('· '+a)).join('<br>'),true);
+
+  state.layer=1;state.phase='l1';
+  addAiMsg(html,'LAYER 1 · 注意力分配');
+  updateProgress();persist();
+}
+
+/* ---------- 第 2 层：解释与解决 ---------- */
+function allModels(){return BUILTIN_MODELS.concat(customModels);}
+
+function pickModel(){
+  const corpus=(state.userInput+' '+state.questions.map(q=>q.free||'').join(' ')).toLowerCase();
+  let best=allModels()[0],bestScore=-1;
+  allModels().forEach(m=>{
+    let s=0;
+    (m.keys||[]).forEach(k=>{if(corpus.includes(k.toLowerCase()))s+=2;});
+    (m.scene||'').split(/[、，,\s]+/).forEach(w=>{if(w&&corpus.includes(w))s+=1;});
+    if(s>bestScore){bestScore=s;best=m;}
+  });
+  return best;
+}
+
+function runL2(){
+  const d=DOMAINS[state.domain];
+  const m=pickModel();
+  state.model=m;
+  const goal=answerText(2)||'稳妥可预期';
+  const stake=answerText(1)||'时间与机会';
+
+  state.angles=[
+    {name:'时间维度',body:'短期看，这个决定的显性代价集中在「'+stake+'」上；长期看，关键变量是「'+state.direction+'」能否兑现为可持续的积累。用「'+m.question+'」来检验：今天做的选择，三个月后会不会让选项变多而不是变少。'},
+    {name:'利益相关方维度',body:'对你而言，核心是「'+state.core+'」的取舍；对受这个决定影响的人（家人、同事、合作方）而言，他们在意的往往是「'+d.secondary[0][0]+' vs '+d.secondary[0][1]+'」。两个视角重合的部分，才是可执行的部分。'}
+  ];
+  state.conclusion='在「'+state.boundary.split('，')[0].replace('在「','').replace('」的时间窗口内','')+'」的约束下，建议优先保住「'+state.direction+'」——它与你要的「'+goal+'」一致；但这不是终局答案，还需通过第 3 层的对抗验证。';
+
+  let html=field('【调用模型】','<strong>'+esc(m.name)+'</strong><span class="dim">　选择理由：你的问题属于「'+esc(m.scene)+'」类型，该模型的关键问题——「'+esc(m.question)+'」——最直接命中当前矛盾。</span>');
+  html+=field('【角度 1 · '+state.angles[0].name+'】',esc(state.angles[0].body));
+  html+=field('【角度 2 · '+state.angles[1].name+'】',esc(state.angles[1].body));
+  html+=field('【初步结论】',esc(state.conclusion));
+  html+=field('【下一步】','<span class="dim">说「继续」进入对抗验证，「重选」返回第 1 层，「直接给结论」可跳过验证（将标注未经对抗验证）。</span>');
+
+  state.layer=2;state.phase='l2';
+  addAiMsg(html,'LAYER 2 · 解释与解决');
+  updateProgress();persist();
+}
+
+/* ---------- 第 3 层：验证与反馈 ---------- */
+function runL3(skipped){
+  const d=DOMAINS[state.domain];
+  if(skipped){
+    let html=field('【结论】',esc(state.conclusion||'（尚未生成结论）'));
+    html+=field('【注意】','该结论<strong>未经对抗验证</strong>，请自行推演反方立场后再行动。',true);
+    html+='<blockquote class="verdict">你才是决定者，我做的是帮你看清楚。</blockquote>';
+    state.phase='done';
+    addAiMsg(html,'直接结论 · 未经对抗验证');
+    archiveSession();persist();
+    return;
+  }
+  state.counter='反过来想：如果「'+d.core[1]+'」才是真正的瓶颈呢？支持反方的最强理由是——人倾向于高估自己能承受的波动、低估放弃「'+d.core[0]+'」的隐性代价。这个反方成立的条件是：你的兜底资源（积蓄、支持系统、退路）比自述的更薄，或者时间窗口比假设的更紧。';
+  state.divergences=[
+    {label:'事实分歧',body:'双方对「时间窗口内会发生什么」的判断不同：正方默认环境稳定，反方默认波动放大。'},
+    {label:'价值分歧',body:'「'+state.core+'」孰轻孰重，没有客观答案——它取决于你对「'+ (answerText(1)||'时间与机会') +'」的真实定价。'},
+    {label:'不确定性分歧',body:'反方成立的前提（兜底资源更薄 / 时间更紧）是否属实，只有你能核实。'}
+  ];
+  state.verdictQ='如果三个月后证明反方是对的，你今天的哪个决定会最后悔？——从这个问题出发做最终裁决。';
+
+  let html=field('【最强反方】',esc(state.counter));
+  html+=field('【分歧点】',state.divergences.map((dv,i)=>
+    '<div class="div-point"><div class="dlabel">'+esc((i+1)+'. '+dv.label)+'</div><div>'+esc(dv.body)+'</div></div>'
+  ).join(''));
+  html+=field('【需要你判断】',esc(state.verdictQ));
+  html+=field('【模式说明】','当前为单 AI 模式（反方由同一 AI 扮演），建议把以上分歧点交给另一个 AI 交叉验证。',true);
+  html+='<blockquote class="verdict">你才是决定者，我做的是帮你看清楚。</blockquote>';
+  html+=field('【后续】','<span class="dim">说「重选」回到上一层，「重置」开始新问题（本次会话已存入历史记录）。</span>');
+
+  state.layer=3;state.phase='done';
+  addAiMsg(html,'LAYER 3 · 验证与反馈');
+  updateProgress();
+  archiveSession();persist();
+}
+
+/* ---------- 进度指示 ---------- */
+function updateProgress(){
+  document.querySelectorAll('.step').forEach(el=>{
+    const l=+el.dataset.layer;
+    el.classList.toggle('done',l<state.layer||(state.phase==='done'&&l<=state.layer));
+    el.classList.toggle('current',l===state.layer&&state.phase!=='done');
+  });
+}
+</script>
+<script>
+/* ---------- 输入路由 ---------- */
+function handleUserText(raw){
+  const text=raw.trim();
+  if(!text)return;
+  state.snapshots.push(deepCopy({layer:state.layer,phase:state.phase,userInput:state.userInput,domain:state.domain,questions:state.questions,assumptions:state.assumptions,boundary:state.boundary,core:state.core,secondary:state.secondary,direction:state.direction,model:state.model,angles:state.angles,conclusion:state.conclusion,counter:state.counter,divergences:state.divergences,verdictQ:state.verdictQ,archived:state.archived}));
+  addUserMsg(text);
+
+  /* 全局指令 */
+  if(text==='重置'){doReset();return;}
+  if(text==='暂停'){
+    persist();
+    addAiMsg(field('【已暂停】','<span class="dim">当前进度（第 '+state.layer+' 层）已保存到本地，刷新或重开页面后会自动恢复。说「继续」回到流程。</span>'),'系统');
+    return;
+  }
+  if(text==='直接给结论'){
+    if(state.phase==='idle'){addAiMsg(field('【提示】','<span class="dim">还没有可总结的问题，请先描述你的问题。</span>'),'系统');return;}
+    if(state.phase==='l0'){state.questions.forEach(q=>{if(!q.answer&&!q.free)q.answer='跳过';});runL1();setTimeout(()=>{runL2();setTimeout(()=>runL3(true),300);},300);return;}
+    if(state.phase==='l1'){runL2();setTimeout(()=>runL3(true),300);return;}
+    runL3(true);return;
+  }
+  if(text==='重选'){doReselect();return;}
+  if(text==='继续'){doContinue();return;}
+
+  /* 按阶段处理 */
+  if(state.phase==='idle'){
+    const na=checkNA(text);
+    state.userInput=text;
+    state.domain=detectDomain(text);
+    if(na){
+      state.phase='na';
+      addAiMsg(field('【协议不适用】','这属于<strong>'+na.type+'</strong>。'+na.hint+'<br><span class="dim">如果你还有一个需要权衡取舍的复杂问题，直接说出来，我会启动四层协议。</span>'),'快速通道');
+      persist();return;
+    }
+    state.questions=buildQuestions(state.domain);
+    addAiMsg(field('【收到问题】',esc(text)+'<br><span class="dim">识别领域：'+DOMAINS[state.domain].name+'。启动四层提纯协议。</span>'),'SEEK PROTOCOL');
+    setTimeout(renderL0,350);
+    persist();return;
+  }
+
+  if(state.phase==='l0'){
+    if(/跳过/.test(text)){
+      state.questions.forEach(q=>{if(!q.answer&&!q.free)q.answer='跳过';});
+      runL1();return;
+    }
+    if(parseAnswers(text)){
+      if(allAnswered())runL1();
+      else addAiMsg(field('【已记录】','<span class="dim">还剩 '+(3-state.questions.filter(q=>q.answer||q.free).length)+' 题未答，继续点击选项或说「跳过」。</span>'),'LAYER 0 · 信息收集');
+      persist();return;
+    }
+    /* 自然语言补充：记入未答题并推进 */
+    state.questions.forEach(q=>{if(!q.answer&&!q.free)q.free=text;});
+    addAiMsg(field('【已记录】','<span class="dim">你的补充已作为自由回答记录。进入第 1 层。</span>'),'LAYER 0 · 信息收集');
+    setTimeout(runL1,350);return;
+  }
+
+  /* l1 / l2 / done 阶段的非指令输入：视为对当前层的补充，重新计算该层 */
+  if(state.phase==='l1'){
+    state.userInput+='；补充：'+text;
+    runL1();return;
+  }
+  if(state.phase==='l2'){
+    state.questions[2].free=text;
+    runL2();return;
+  }
+  if(state.phase==='done'||state.phase==='na'){
+    state=freshState();
+    state.userInput=text;
+    state.domain=detectDomain(text);
+    const na=checkNA(text);
+    if(na){state.phase='na';addAiMsg(field('【协议不适用】','这属于<strong>'+na.type+'</strong>。'+na.hint),'快速通道');persist();return;}
+    state.questions=buildQuestions(state.domain);
+    addAiMsg(field('【收到新问题】',esc(text)+'<br><span class="dim">识别领域：'+DOMAINS[state.domain].name+'。启动四层提纯协议。</span>'),'SEEK PROTOCOL');
+    setTimeout(renderL0,350);updateProgress();persist();return;
+  }
+}
+
+function doContinue(){
+  if(state.phase==='l0'){state.questions.forEach(q=>{if(!q.answer&&!q.free)q.answer='跳过';});runL1();return;}
+  if(state.phase==='l1'){runL2();return;}
+  if(state.phase==='l2'){runL3(false);return;}
+  if(state.phase==='done'||state.phase==='na'){addAiMsg(field('【提示】','<span class="dim">本轮已结束。直接输入新问题即可开始下一轮，或说「重置」清空。</span>'),'系统');return;}
+  addAiMsg(field('【提示】','<span class="dim">请先描述你的问题。</span>'),'系统');
+}
+
+function doReselect(){
+  if(state.phase==='l1'){
+    state.questions=buildQuestions(state.domain);
+    state.layer=0;
+    addAiMsg(field('【返回第 0 层】','<span class="dim">重新回答以下问题（之前的选择已清空）。</span>'),'系统');
+    setTimeout(renderL0,300);return;
+  }
+  if(state.phase==='l2'){
+    state.layer=1;state.phase='l1';
+    runL1();return;
+  }
+  if(state.phase==='done'){
+    state.layer=2;state.phase='l2';
+    runL2();return;
+  }
+  addAiMsg(field('【提示】','<span class="dim">当前没有可返回的上一层。</span>'),'系统');
+}
+
+function doReset(){
+  archiveSession();
+  state=freshState();
+  localStorage.removeItem(LS_STATE);
+  thread.innerHTML='';
+  updateProgress();
+  welcome();
+}
+
+/* ---------- 编辑回滚 ---------- */
+function editFrom(msgEl){
+  const msgs=[...thread.children];
+  const idx=msgs.indexOf(msgEl);
+  const userMsgs=msgs.filter(m=>m.classList.contains('msg-user'));
+  const uIdx=userMsgs.indexOf(msgEl);
+  if(uIdx<0||uIdx>=state.snapshots.length)return;
+  const snap=state.snapshots[uIdx];
+  Object.assign(state,deepCopy(snap));
+  state.snapshots=state.snapshots.slice(0,uIdx);
+  msgs.slice(idx).forEach(m=>m.remove());
+  inputEl.value=msgEl.childNodes[0].textContent;
+  inputEl.focus();
+  updateProgress();persist();
+}
+
+/* ---------- 历史与导出 ---------- */
+function archiveSession(){
+  if(!state.userInput||state.archived)return;
+  state.archived=true;
+  const h=loadJSON(LS_HISTORY,[]);
+  h.unshift({
+    time:new Date().toISOString(),
+    input:state.userInput,
+    domain:DOMAINS[state.domain].name,
+    layer:state.layer,
+    core:state.core||'',
+    model:state.model?state.model.name:'',
+    conclusion:state.conclusion||''
+  });
+  saveJSON(LS_HISTORY,h.slice(0,100));
+}
+function exportHistory(){
+  const data={exportedAt:new Date().toISOString(),history:loadJSON(LS_HISTORY,[]),currentState:state};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='seek-protocol-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();URL.revokeObjectURL(a.href);
+}
+
+/* ---------- 抽屉面板 ---------- */
+let activeTab='models';
+function openDrawer(tab){
+  activeTab=tab;
+  document.querySelectorAll('.dtab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  drawer.classList.add('open');
+  renderDrawer();
+}
+function renderDrawer(){
+  if(activeTab==='models'){
+    let html='';
+    allModels().forEach((m,i)=>{
+      const isCustom=i>=BUILTIN_MODELS.length;
+      html+='<div class="model-item">'+(isCustom?'<button class="mdel" data-i="'+(i-BUILTIN_MODELS.length)+'">删除</button>':'')
+        +'<div class="mname">'+esc(m.name)+(isCustom?'<span class="custom-badge">自定义</span>':'')+'</div>'
+        +'<div class="mmeta">适用：'+esc(m.scene)+'<br>关键问题：'+esc(m.question)+'</div></div>';
+    });
+    html+='<div class="add-model"><textarea id="new-model" placeholder="模型名称 | 适用场景 | 关键问题"></textarea>'
+      +'<div class="tip">格式：模型名称 | 适用场景 | 关键问题。自定义模型与内置模型同等参与自动匹配。</div>'
+      +'<div class="btn-row"><button class="btn" id="add-model-btn">添加模型</button></div></div>';
+    drawerBody.innerHTML=html;
+    drawerBody.querySelectorAll('.mdel').forEach(b=>b.onclick=()=>{
+      customModels.splice(+b.dataset.i,1);saveJSON(LS_MODELS,customModels);renderDrawer();
+    });
+    document.getElementById('add-model-btn').onclick=()=>{
+      const v=document.getElementById('new-model').value.trim();
+      const parts=v.split('|').map(s=>s.trim());
+      if(parts.length!==3||parts.some(p=>!p)){
+        document.getElementById('new-model').style.borderColor='#e06565';return;
+      }
+      customModels.push({name:parts[0],scene:parts[1],question:parts[2],keys:parts[1].split(/[、，,\s]+/)});
+      saveJSON(LS_MODELS,customModels);renderDrawer();
+    };
+  }else{
+    const h=loadJSON(LS_HISTORY,[]);
+    let html='<div class="btn-row" style="margin-bottom:14px"><button class="btn ghost" id="export-btn">导出 JSON</button></div>';
+    if(!h.length)html+='<div class="empty-note">还没有历史记录。完成一轮协议后会自动存档。</div>';
+    h.forEach(it=>{
+      html+='<div class="hist-item"><div class="htime">'+esc(it.time.replace('T',' ').slice(0,16))+'</div>'
+        +'<div class="hinput">'+esc(it.input.length>50?it.input.slice(0,50)+'…':it.input)+'</div>'
+        +'<div class="hmeta">'+esc(it.domain)+' · 走到第 '+it.layer+' 层'+(it.model?' · '+esc(it.model):'')+'</div></div>';
+    });
+    drawerBody.innerHTML=html;
+    document.getElementById('export-btn').onclick=exportHistory;
+  }
+}
+
+/* ---------- 欢迎 ---------- */
+function welcome(){
+  addAiMsg(
+    field('【协议就绪】','你好，我是 Seek Protocol——三层提纯协议。<br><span class="dim">流程：L0 信息收集 → L1 注意力分配 → L2 解释与解决 → L3 验证与反馈。我不替你拍板，只帮你把问题看清楚。</span>')
+    +field('【开始使用】','<span class="dim">直接在下方输入你想看清的问题（职业、资源、关系、学习……任何取舍难题）。简单事实查询、紧急情况、纯创意请求会自动走快速通道。</span>'),
+    'SEEK PROTOCOL · 就绪'
+  );
+}
+
+/* ---------- 启动 ---------- */
+function init(){
+  const saved=loadJSON(LS_STATE,null);
+  if(saved&&saved.state&&saved.state.userInput){
+    state=Object.assign(freshState(),saved.state);
+    restoreMessages(saved.messages);
+    addAiMsg(field('【已恢复】','<span class="dim">检测到上次暂停的进度（第 '+state.layer+' 层），已自动恢复。说「继续」推进，「重置」重新开始。</span>'),'系统');
+  }else{
+    welcome();
+  }
+  updateProgress();
+
+  sendBtn.onclick=()=>{const v=inputEl.value;inputEl.value='';inputEl.style.height='auto';handleUserText(v);};
+  inputEl.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendBtn.click();}
+  });
+  inputEl.addEventListener('input',()=>{
+    inputEl.style.height='auto';
+    inputEl.style.height=Math.min(inputEl.scrollHeight,140)+'px';
+  });
+  document.querySelectorAll('.cmd[data-cmd]').forEach(b=>b.onclick=()=>handleUserText(b.dataset.cmd));
+  document.getElementById('btn-models').onclick=()=>openDrawer('models');
+  document.getElementById('btn-history').onclick=()=>openDrawer('history');
+  document.querySelectorAll('.dtab').forEach(t=>t.onclick=()=>openDrawer(t.dataset.tab));
+  document.getElementById('drawer-close').onclick=()=>drawer.classList.remove('open');
+}
+init();
+</script>
+</body>
+</html>
